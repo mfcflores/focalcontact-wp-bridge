@@ -4,6 +4,7 @@ namespace FCWPB\Infra;
 if (!defined('ABSPATH')) { exit; }
 
 final class Queue {
+
     const HOOK = 'fcwpb_process_job';
 
     public static function init(): void {
@@ -11,14 +12,6 @@ final class Queue {
     }
 
     public static function enqueue(string $job_type, array $payload): void {
-        $settings = \fcwpb_get_settings();
-        $use_queue = !empty($settings['advanced']['use_queue']);
-
-        if ($use_queue && function_exists('as_enqueue_async_action')) {
-            as_enqueue_async_action(self::HOOK, [$job_type, $payload], 'fcwpb');
-            return;
-        }
-
         $ts = time() + 5;
         wp_schedule_single_event($ts, self::HOOK, [$job_type, $payload]);
     }
@@ -29,26 +22,30 @@ final class Queue {
                 case 'hl_post':
                     $endpoint = $payload['endpoint'] ?? '';
                     $data     = $payload['data'] ?? [];
-                    $result   = HLClient::post($endpoint, $data);
-                    \fcwpb_log('info', 'HL POST completed', ['endpoint' => $endpoint, 'ok' => $result['ok'] ?? null]);
+                    HLClient::post($endpoint, $data);
+                    \fcwpb_log('info', 'HL POST completed', compact('endpoint'));
                     break;
+
                 case 'hl_event':
-                    $event = $payload['event'];
-                    $ts    = gmdate('c', $payload['ts'] ?? time());
-                    $data  = $payload['data'] ?? [];
+                    $tokens = HLClient::get_tokens();
+                    $location = $tokens['locationId'] ?? '';
 
-                    $fields = [
-                        "event_{$event}" => true,
-                        "event_{$event}_at" => $ts,
-                        "event_{$event}_data" => wp_json_encode($data),
+                    $event  = $payload['event'] ?? '';
+                    $ts     = gmdate('c', $payload['ts'] ?? time());
+                    $data   = $payload['data'] ?? [];
+
+                    $contactPayload = [
+                        'locationId' => $location,
+                        'customFields' => [
+                            "event_{$event}"      => true,
+                            "event_{$event}_at"   => $ts,
+                            "event_{$event}_data" => wp_json_encode($data),
+                        ],
                     ];
-
-                    HLClient::post('/contacts/', [
-                        'customField' => $fields
-                    ]);
-
+                    HLClient::upsert_contact($contactPayload);
                     \fcwpb_log('info', 'HL event synced', ['event' => $event]);
                     break;
+
                 default:
                     \fcwpb_log('error', 'Unknown job type', ['job_type' => $job_type]);
             }

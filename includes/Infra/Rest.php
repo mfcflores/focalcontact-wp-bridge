@@ -6,41 +6,40 @@ if (!defined('ABSPATH')) { exit; }
 final class Rest {
 
     public static function init(): void {
-        /*add_action('rest_api_init', function () {
-            register_rest_route('fcwpb/v1', '/event', [
-                'methods'  => 'POST',
-                'callback' => [__CLASS__, 'handle_event'],
-                'permission_callback' => '__return_true',
-            ]);
-        });*/
-
         add_action('rest_api_init', function () {
-            register_rest_route('fcwpb/v1', '/test-contact', [
+            register_rest_route('fcwpb/v1', '/oauth/callback', [
                 'methods'  => 'GET',
-                'permission_callback' => '__return_true',
-                'callback' => function () {
-                    try {
-                        $result = \FCWPB\Infra\HLClient::post('contacts', [
-                            'email'     => 'test+' . time() . '@example.com',
-                            'firstName' => 'Test',
-                            'lastName'  => 'Contact',
+                'callback' => function(\WP_REST_Request $req) {
+                    $code = $req->get_param('code');
+                    $settings = \fcwpb_get_settings();
+                    $client_id = $settings['connection']['client_id'];
+                    $client_secret = $settings['connection']['client_secret'];
+                    $redirect = admin_url('options-general.php?page=fcwpb_oauth_callback');
+
+                    $response = wp_remote_post('https://services.leadconnectorhq.com/oauth/token', [
+                        'body' => [
+                            'grant_type'    => 'authorization_code',
+                            'code'          => $code,
+                            'client_id'     => $client_id,
+                            'client_secret' => $client_secret,
+                            'redirect_uri'  => $redirect,
+                        ],
+                    ]);
+                    $body = json_decode(wp_remote_retrieve_body($response), true);
+                    if (!empty($body['access_token'])) {
+                        update_option(HLClient::OPTION_KEY, [
+                            'access_token'  => $body['access_token'],
+                            'refresh_token' => $body['refresh_token'],
+                            'expires_at'    => time() + $body['expires_in'],
+                            'locationId'    => $body['locationId'],
                         ]);
-
-                        return new \WP_REST_Response([
-                            'ok'     => true,
-                            'result' => $result,
-                        ], 200);
-
-                    } catch (\Throwable $e) {
-                        return new \WP_REST_Response([
-                            'ok'    => false,
-                            'error' => $e->getMessage(),
-                        ], 500);
+                        return ['ok'=>true];
                     }
+                    return ['ok'=>false, 'error'=> $body];
                 },
+                'permission_callback' => '__return_true',
             ]);
         });
-
     }
 
     private static function snake_case(string $s): string {

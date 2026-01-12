@@ -39,8 +39,8 @@ final class SettingsPage {
         $settings = $defaults;
 
         // Connection
-        $settings['connection']['api_base'] = esc_url_raw($input['connection']['api_base'] ?? $settings['connection']['api_base']);
-        $settings['connection']['api_key']  = sanitize_text_field($input['connection']['api_key'] ?? $settings['connection']['api_key']);
+        $settings['connection']['client_id'] = sanitize_text_field($input['connection']['client_id'] ?? $settings['connection']['client_id']);
+        $settings['connection']['client_secret']  = sanitize_text_field($input['connection']['client_secret'] ?? $settings['connection']['client_secret']);
 
         // Modules
         foreach ($settings['modules'] as $k => $_) {
@@ -134,6 +134,19 @@ final class SettingsPage {
         $settings = \fcwpb_get_settings();
         $log = get_option('fcwpb_log', []);
         if (!is_array($log)) $log = [];
+
+        $client_id  = esc_attr($settings['connection']['client_id']);
+        $version_id = explode('-', $client_id)[0];
+
+        $redirect_uri = urlencode('https://buzzwebmedia.com.au/leadconnector/oauth');
+
+        $scope = urlencode(
+            'businesses.readonly businesses.write ' .
+            'contacts.readonly contacts.write ' .
+            'oauth.readonly oauth.write ' .
+            'locations.readonly'
+        );
+
         ?>
         <div class="wrap">
             <h1>FocalContact WP Bridge</h1>
@@ -172,19 +185,22 @@ final class SettingsPage {
                         <h2 id="fcwpb-section-connection" class="title">Connection</h2>
                         <table class="form-table" role="presentation">
                             <tr>
-                                <th scope="row"><label for="fcwpb_api_base">API Base</label></th>
-                                <td>
-                                    <input id="fcwpb_api_base" type="text" class="regular-text"
-                                        name="fcwpb_settings[connection][api_base]"
-                                        value="<?php echo esc_attr($settings['connection']['api_base']); ?>">
-                                </td>
+                                <th scope="row"><label for="fcwpb_client_id">Client ID</label></th>
+                                <td><input id="fcwpb_client_id" type="text" class="regular-text"
+                                        name="fcwpb_settings[connection][client_id]"
+                                        value="<?php echo esc_attr($settings['connection']['client_id'] ?? ''); ?>"></td>
                             </tr>
                             <tr>
-                                <th scope="row"><label for="fcwpb_api_key">Sub-account API Key</label></th>
+                                <th scope="row"><label for="fcwpb_client_secret">Client Secret</label></th>
+                                <td><input id="fcwpb_client_secret" type="password" class="regular-text"
+                                        name="fcwpb_settings[connection][client_secret]"
+                                        value="<?php echo esc_attr($settings['connection']['client_secret'] ?? ''); ?>"></td>
+                            </tr>
+                            <tr>
+                                <th scope="row">HighLevel OAuth</th>
                                 <td>
-                                    <input id="fcwpb_api_key" type="password" class="regular-text"
-                                        name="fcwpb_settings[connection][api_key]"
-                                        value="<?php echo esc_attr($settings['connection']['api_key']); ?>">
+                                    <a class="button button-primary"
+                                    href="https://marketplace.gohighlevel.com/oauth/chooselocation?response_type=code&client_id=<?php echo $client_id; ?>&redirect_uri=<?php echo $redirect_uri; ?>&scope=<?php echo $scope; ?>&version_id=<?php echo $version_id; ?>">Connect to HighLevel</a>
                                 </td>
                             </tr>
                         </table>
