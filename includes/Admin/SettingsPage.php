@@ -38,6 +38,11 @@ final class SettingsPage {
 
         $settings = $defaults;
 
+        // Preserve OAuth tokens (written programmatically)
+        if (!empty($settings['oauth']) && is_array($settings['oauth'])) {
+            $settings['oauth'] = $settings['oauth'];
+        }
+
         // Connection
         $settings['connection']['client_id'] = sanitize_text_field($input['connection']['client_id'] ?? $settings['connection']['client_id']);
         $settings['connection']['client_secret']  = sanitize_text_field($input['connection']['client_secret'] ?? $settings['connection']['client_secret']);
@@ -138,7 +143,7 @@ final class SettingsPage {
         $client_id  = esc_attr($settings['connection']['client_id']);
         $version_id = explode('-', $client_id)[0];
 
-        $redirect_uri = urlencode('https://buzzwebmedia.com.au/leadconnector/oauth');
+        $redirect_uri = urlencode(admin_url('admin-post.php?action=fcwpb_oauth'));
 
         $scope = urlencode(
             'businesses.readonly businesses.write ' .

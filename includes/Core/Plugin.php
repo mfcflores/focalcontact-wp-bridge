@@ -8,6 +8,7 @@ use FCWPB\Admin\SettingsPage;
 use FCWPB\Infra\Queue;
 use FCWPB\Infra\Rest;
 use FCWPB\Infra\Migration;
+use FCWPB\Infra\OAuth;
 
 final class Plugin {
     private static $instance = null;
@@ -26,6 +27,8 @@ final class Plugin {
         if (is_admin()) {
             (new SettingsPage())->init();
         }
+
+        (new OAuth())->init();
 
         Queue::init();
         Rest::init();

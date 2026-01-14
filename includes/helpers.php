@@ -4,9 +4,14 @@ if (!defined('ABSPATH')) { exit; }
 function fcwpb_get_settings(): array {
     $defaults = [
         'connection' => [
-            // LeadConnector base is often correct for HighLevel sub-account keys.
-            'api_base' => 'https://services.leadconnectorhq.com',
-            'api_key'  => '',
+            'client_id' => '',
+            'client_secret'  => '',
+        ],
+        'oauth' => [
+            'access_token' => '',
+            'refresh_token' => '',
+            'expires_at' => 0,
+            'location_id' => '',
         ],
         'modules' => [
             'utm' => true,
@@ -51,9 +56,14 @@ function fcwpb_get_settings(): array {
 function fcwpb_get_default_settings(): array {
     return [
         'connection' => [
-            // LeadConnector base is often correct for HighLevel sub-account keys.
-            'api_base' => 'https://services.leadconnectorhq.com',
-            'api_key'  => '',
+            'client_id' => '',
+            'client_secret'  => '',
+        ],
+        'oauth' => [
+            'access_token' => '',
+            'refresh_token' => '',
+            'expires_at' => 0,
+            'location_id' => '',
         ],
         'modules' => [
             'utm' => true,
@@ -176,4 +186,3 @@ add_filter( 'gform_field_content', function ( $content, $field, $value, $lead_id
     return $content;
 
 }, 10, 5 );
-
