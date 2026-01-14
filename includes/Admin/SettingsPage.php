@@ -1,6 +1,8 @@
 <?php
 namespace FCWPB\Admin;
 
+use FCWPB\Infra\HLClient;
+
 if (!defined('ABSPATH')) { exit; }
 
 final class SettingsPage {

@@ -7,122 +7,145 @@ if (!defined('ABSPATH')) {
 
 final class HLClient {
 
-    // Storage keys for options
-    const OPT = 'fcwpb_ghl_oauth';
-
     /**
-     * Get stored token data
+     * Get a valid access token (refresh if needed)
      */
-    private static function get_token_data(): array {
-        $data = get_option(self::OPT, []);
-        if (!is_array($data)) {
-            return [];
-        }
-        return $data;
-    }
+    private static function get_access_token(): string {
+        $settings = \fcwpb_get_settings();
+        $oauth    = $settings['oauth'] ?? [];
 
-    /**
-     * Save token data
-     */
-    private static function set_token_data(array $data): void {
-        update_option(self::OPT, $data, true);
-    }
-
-    /**
-     * Refresh access token if expired
-     */
-    private static function ensure_token(): string {
-        $data = self::get_token_data();
-        $now = time();
-
-        // If no token stored, bail
-        if (empty($data['access_token']) || empty($data['expires_at'])) {
-            throw new \RuntimeException('Missing GHL OAuth token — connect the app first.');
+        if (empty($oauth['access_token']) || empty($oauth['expires_at'])) {
+            throw new \RuntimeException('Missing OAuth token. Please connect HighLevel.');
         }
 
-        // Refresh if expired or close to expiry (e.g., within 60 seconds)
-        if ($now >= $data['expires_at'] - 60) {
-            $data = self::refresh_token($data['refresh_token']);
-            self::set_token_data($data);
+        // Refresh if expired (or about to)
+        if (time() >= ($oauth['expires_at'] - 60)) {
+            $oauth = self::refresh_token($oauth);
+            $settings['oauth'] = $oauth;
+            \fcwpb_update_settings($settings);
         }
 
-        return $data['access_token'];
+        return $oauth['access_token'];
     }
 
     /**
      * Refresh OAuth token
      */
-    private static function refresh_token(string $refresh_token): array {
+    private static function refresh_token(array $oauth): array {
         $settings = \fcwpb_get_settings();
 
-        $response = wp_remote_post('https://services.leadconnectorhq.com/oauth/token', [
-            'body' => [
-                'grant_type'    => 'refresh_token',
-                'refresh_token' => $refresh_token,
-                'client_id'     => $settings['connection']['client_id'] ?? '',
-                'client_secret' => $settings['connection']['client_secret'] ?? '',
+        $response = wp_remote_post(
+            'https://services.leadconnectorhq.com/oauth/token',
+            [
+                'headers' => [
+                    'Content-Type' => 'application/x-www-form-urlencoded',
+                ],
+                'body' => [
+                    'grant_type'    => 'refresh_token',
+                    'refresh_token' => $oauth['refresh_token'],
+                    'client_id'     => $settings['connection']['client_id'],
+                    'client_secret' => $settings['connection']['client_secret'],
+                ],
+                'timeout' => 20,
+            ]
+        );
+
+        if (is_wp_error($response)) {
+            throw new \RuntimeException($response->get_error_message());
+        }
+
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+
+        if (empty($body['access_token'])) {
+            throw new \RuntimeException('Invalid refresh response from HighLevel');
+        }
+
+        return [
+            'access_token'  => $body['access_token'],
+            'refresh_token' => $body['refresh_token'] ?? $oauth['refresh_token'],
+            'expires_at'    => time() + intval($body['expires_in'] ?? 3600),
+            'location_id'   => $oauth['location_id'], // keep existing
+        ];
+    }
+    
+    public static function get(string $endpoint): array {
+        $token = self::get_access_token();
+
+        $url = 'https://services.leadconnectorhq.com/' . ltrim($endpoint, '/');
+
+        $response = wp_remote_get($url, [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $token,
+                'Version'       => '2021-07-28',
+                'Accept'        => 'application/json',
             ],
             'timeout' => 20,
         ]);
 
         if (is_wp_error($response)) {
-            throw new \RuntimeException('OAuth refresh failed: ' . $response->get_error_message());
+            throw new \RuntimeException($response->get_error_message());
         }
 
-        $body = json_decode(wp_remote_retrieve_body($response), true);
-        if (empty($body['access_token']) || empty($body['refresh_token'])) {
-            throw new \RuntimeException('Invalid refresh response from GHL');
-        }
+        $code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        $json = json_decode($body, true);
 
         return [
-            'access_token'  => $body['access_token'],
-            'refresh_token' => $body['refresh_token'],
-            'expires_at'    => time() + intval($body['expires_in']),
-            'locationId'    => $body['locationId'] ?? '',
+            'ok'   => $code >= 200 && $code < 300,
+            'code' => $code,
+            'body' => $json ?? $body,
         ];
     }
 
     /**
-     * Low‑level POST
+     * Low-level POST request
      */
     public static function post(string $endpoint, array $data): array {
-        $token = self::ensure_token();
-        $base  = 'https://services.leadconnectorhq.com';
+        $token = self::get_access_token();
 
-        $url = rtrim($base, '/') . '/' . ltrim($endpoint, '/');
+        $url = 'https://services.leadconnectorhq.com/' . ltrim($endpoint, '/');
 
-        $args = [
-            'timeout' => 20,
+        $response = wp_remote_post($url, [
             'headers' => [
                 'Authorization' => 'Bearer ' . $token,
                 'Version'       => '2021-07-28',
                 'Content-Type'  => 'application/json',
                 'Accept'        => 'application/json',
             ],
-            'body' => wp_json_encode($data),
-        ];
+            'body'    => wp_json_encode($data),
+            'timeout' => 20,
+        ]);
 
-        $res = wp_remote_post($url, $args);
-        if (is_wp_error($res)) {
-            throw new \RuntimeException($res->get_error_message());
+        if (is_wp_error($response)) {
+            throw new \RuntimeException($response->get_error_message());
         }
 
-        $code = wp_remote_retrieve_response_code($res);
-        $body = wp_remote_retrieve_body($res);
+        $code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
         $json = json_decode($body, true);
 
         if ($code < 200 || $code >= 300) {
-            \fcwpb_log('error', 'HL API error', ['code' => $code, 'body' => $body, 'endpoint' => $endpoint]);
+            \fcwpb_log('error', 'HighLevel API error', [
+                'endpoint' => $endpoint,
+                'code'     => $code,
+                'body'     => $body,
+            ]);
             return ['ok' => false, 'code' => $code, 'body' => $body];
         }
 
-        return ['ok' => true, 'code' => $code, 'body' => $json ?? $body];
+        return ['ok' => true, 'code' => $code, 'body' => $json];
     }
 
     /**
-     * Upsert a contact
+     * Upsert contact
      */
     public static function upsert_contact(array $contact): array {
+        $settings = \fcwpb_get_settings();
+
+        if (empty($contact['locationId']) && !empty($settings['oauth']['location_id'])) {
+            $contact['locationId'] = $settings['oauth']['location_id'];
+        }
+
         return self::post('contacts/upsert', $contact);
     }
 }
