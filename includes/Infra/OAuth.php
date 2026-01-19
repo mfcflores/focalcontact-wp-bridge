@@ -1,10 +1,14 @@
 <?php
 
 namespace FCWPB\Infra;
+use FCWPB\Admin\SettingsPage;
 
 if (!defined('ABSPATH')) exit;
 
 final class OAuth {
+
+    const OPTION_KEY = 'fcwpb_settings';
+    const OAUTH_KEY = 'fcwpb_oauth';
 
     public function init(): void {
         add_action('admin_post_fcwpb_oauth', [$this, 'handle']);
@@ -15,8 +19,10 @@ final class OAuth {
             wp_die('Missing OAuth code');
         }
 
+        $settings_page = new SettingsPage();
+
         $code = sanitize_text_field($_GET['code']);
-        $settings = \fcwpb_get_settings();
+        $settings = get_option(self::OPTION_KEY, []);
 
         $client_id     = $settings['connection']['client_id'] ?? '';
         $client_secret = $settings['connection']['client_secret'] ?? '';
@@ -51,23 +57,21 @@ final class OAuth {
         $body = json_decode(wp_remote_retrieve_body($response), true);
 
         if (empty($body['access_token'])) {
-            \fcwpb_log('error', 'OAuth failed', $body);
+        \fcwpb_log('error', 'OAuth failed', $body);
             wp_die('OAuth token exchange failed');
         }
-
-        $new_settings = $settings;
-
-        $new_settings['oauth'] = [
+        
+        $oauth = [
             'access_token'  => $body['access_token'],
             'refresh_token' => $body['refresh_token'] ?? '',
             'expires_at'    => time() + intval($body['expires_in'] ?? 3600),
             'location_id'   => $body['locationId'] ?? '',
         ];
 
-        update_option('fcwpb_settings', $new_settings);
+        update_option(self::OAUTH_KEY, $oauth);
 
         \fcwpb_log('info', 'OAuth connected', [
-            'location_id' => $settings['oauth']['location_id'],
+            'location_id' => $oauth['location_id'],
         ]);
 
         wp_safe_redirect(

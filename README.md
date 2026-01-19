@@ -1,13 +1,15 @@
-# FocalContact WP Bridge
+## Features
+- HighLevel OAuth integration
+- Contact upsert
+- REST health test
+- Queue event sync
 
-Version: 0.2.0
+## Installation
+1. Upload plugin
+2. Enter Client ID / Secret
+3. Connect to HighLevel
+4. Use `/wp-json/fcwpb/v1/...` routes
 
-Includes:
-- UTM persistence + hidden field injection
-- Modular feature toggles
-- HighLevel external tracking script: paste script, extract src + tracking id, safe output in footer
-- Page-level conditions for tracking injection (public only, include/exclude paths)
-- Event bridge: `window.FCWPB.track(type, data)` and `fcwpb:track` CustomEvent -> posts to WP REST `/fcwpb/v1/event`
-
-Notes:
-- HighLevel API endpoints in this MVP are placeholders (`contacts`, `events`) and must be mapped to your chosen endpoints.
+## Endpoints
+- GET /fcwpb/v1/health
+- GET /fcwpb/v1/test-contact

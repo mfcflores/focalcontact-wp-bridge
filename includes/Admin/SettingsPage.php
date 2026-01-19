@@ -7,9 +7,13 @@ if (!defined('ABSPATH')) { exit; }
 
 final class SettingsPage {
 
+    const OPTION_KEY = 'fcwpb_settings';
+    const OAUTH_KEY = 'fcwpb_oauth';
+
     public function init(): void {
         add_action('admin_menu', [$this, 'menu']);
         add_action('admin_init', [$this, 'register_settings']);
+        add_action('admin_post_fcwpb_disconnect', [$this, 'handle_disconnect']);
     }
 
     public function menu(): void {
@@ -27,23 +31,20 @@ final class SettingsPage {
         register_setting('fcwpb_settings_group', 'fcwpb_settings', [
             'type' => 'array',
             'sanitize_callback' => [$this, 'sanitize'],
-            'default' => \fcwpb_get_default_settings(),
+            //'default' => \fcwpb_get_default_settings(),
         ]);
     }
 
     public function sanitize($input): array {
-        $defaults = \fcwpb_get_settings();
+        $current  = get_option('fcwpb_settings', []);
+        $defaults = \fcwpb_get_default_settings();
 
         if (!is_array($input)) {
-            return $defaults;
+            return $current ?: $defaults;
         }
 
+        // Start from defaults
         $settings = $defaults;
-
-        // Preserve OAuth tokens (written programmatically)
-        if (!empty($settings['oauth']) && is_array($settings['oauth'])) {
-            $settings['oauth'] = $settings['oauth'];
-        }
 
         // Connection
         $settings['connection']['client_id'] = sanitize_text_field($input['connection']['client_id'] ?? $settings['connection']['client_id']);
@@ -139,6 +140,7 @@ final class SettingsPage {
         if (!current_user_can('manage_options')) return;
 
         $settings = \fcwpb_get_settings();
+        $oauth = get_option(self::OAUTH_KEY, []);
         $log = get_option('fcwpb_log', []);
         if (!is_array($log)) $log = [];
 
@@ -153,6 +155,10 @@ final class SettingsPage {
             'oauth.readonly oauth.write ' .
             'locations.readonly'
         );
+
+        $is_connected = !empty($oauth['access_token']);
+        $expires_at   = $oauth['expires_at'] ?? 0;
+        $location_id  = $oauth['location_id'] ?? '';
 
         ?>
         <div class="wrap">
@@ -173,6 +179,11 @@ final class SettingsPage {
                 .fcwpb-main { flex: 1; min-width: 0; }
                 .fcwpb-inline-box { background:#f6f7f7; border:1px solid #ccd0d4; padding:12px; border-radius:8px; }
             </style>
+            <?php
+                if (!empty($_GET['disconnected'])) {
+                    echo '<div class="notice notice-success is-dismissible"><p>Disconnected from HighLevel.</p></div>';
+                }
+            ?>
 
             <div class="fcwpb-layout">
                 <div class="fcwpb-nav">
@@ -206,8 +217,46 @@ final class SettingsPage {
                             <tr>
                                 <th scope="row">HighLevel OAuth</th>
                                 <td>
-                                    <a class="button button-primary"
+                                    <?php if (!$is_connected): ?>
+
+                                        <!-- NOT CONNECTED -->
+                                        <a class="button button-primary"
                                     href="https://marketplace.gohighlevel.com/oauth/chooselocation?response_type=code&client_id=<?php echo $client_id; ?>&redirect_uri=<?php echo $redirect_uri; ?>&scope=<?php echo $scope; ?>&version_id=<?php echo $version_id; ?>">Connect to HighLevel</a>
+
+                                    <?php else: ?>
+
+                                        <!-- CONNECTED -->
+                                        <p>
+                                            <strong>Status:</strong> ✅ Connected
+                                        </p>
+
+                                        <?php if ($expires_at): ?>
+                                            <p>
+                                                <strong>Token expires in:</strong>
+                                                <?php echo max(0, floor(($expires_at - time()) / 60)); ?> minutes
+                                            </p>
+                                        <?php endif; ?>
+
+                                        <?php if ($location_id): ?>
+                                            <p>
+                                                <strong>Location ID:</strong>
+                                                <code><?php echo esc_html($location_id); ?></code>
+                                            </p>
+                                        <?php endif; ?>
+
+                                        <p>
+                                            <a href="<?php echo esc_url(
+                                                wp_nonce_url(
+                                                    admin_url('admin-post.php?action=fcwpb_disconnect'),
+                                                    'fcwpb_disconnect'
+                                                )
+                                            ); ?>"
+                                            class="button button-secondary">
+                                                Disconnect
+                                            </a>
+                                        </p>
+
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                         </table>
@@ -429,4 +478,18 @@ final class SettingsPage {
         $html .= '</td></tr>';
         return $html;
     }
+
+    public function handle_disconnect() {
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Unauthorized', 'fcwpb'));
+        }
+
+        check_admin_referer('fcwpb_disconnect');
+
+        delete_option(self::OAUTH_KEY);
+
+        wp_redirect(admin_url('admin.php?page=fcwpb&disconnected=1'));
+        exit;
+    }
+
 }

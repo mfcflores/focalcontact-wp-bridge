@@ -7,12 +7,15 @@ if (!defined('ABSPATH')) {
 
 final class HLClient {
 
+    const OPTION_KEY = 'fcwpb_settings';
+    const OAUTH_KEY = 'fcwpb_oauth';
+
     /**
      * Get a valid access token (refresh if needed)
      */
     private static function get_access_token(): string {
         $settings = \fcwpb_get_settings();
-        $oauth    = $settings['oauth'] ?? [];
+        $oauth = get_option(self::OAUTH_KEY, []);
 
         if (empty($oauth['access_token']) || empty($oauth['expires_at'])) {
             throw new \RuntimeException('Missing OAuth token. Please connect HighLevel.');
@@ -141,9 +144,10 @@ final class HLClient {
      */
     public static function upsert_contact(array $contact): array {
         $settings = \fcwpb_get_settings();
+        $oauth = get_option(self::OAUTH_KEY, []);
 
-        if (empty($contact['locationId']) && !empty($settings['oauth']['location_id'])) {
-            $contact['locationId'] = $settings['oauth']['location_id'];
+        if (empty($contact['locationId']) && !empty($oauth['location_id'])) {
+            $contact['locationId'] = $oauth['location_id'];
         }
 
         return self::post('contacts/upsert', $contact);

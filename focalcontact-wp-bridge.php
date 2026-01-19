@@ -10,7 +10,8 @@
 
 if (!defined('ABSPATH')) { exit; }
 
-define('FCWPB_VERSION', '0.2.0');
+define('FCWPB_VERSION', '1.0.0');
+define('FCWPB_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('FCWPB_PATH', plugin_dir_path(__FILE__));
 define('FCWPB_URL', plugin_dir_url(__FILE__));
 define('FCWPB_FILE', __FILE__);

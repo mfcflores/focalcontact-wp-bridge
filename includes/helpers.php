@@ -2,16 +2,18 @@
 if (!defined('ABSPATH')) { exit; }
 
 function fcwpb_get_settings(): array {
+    static $cache = null;
+
+    if ($cache !== null) {
+        return $cache;
+    }
+
+    $settings = get_option('fcwpb_settings', []);
+
     $defaults = [
         'connection' => [
             'client_id' => '',
             'client_secret'  => '',
-        ],
-        'oauth' => [
-            'access_token' => '',
-            'refresh_token' => '',
-            'expires_at' => 0,
-            'location_id' => '',
         ],
         'modules' => [
             'utm' => true,
@@ -48,9 +50,11 @@ function fcwpb_get_settings(): array {
         ],
     ];
 
-    $saved = get_option('fcwpb_settings', []);
-    if (!is_array($saved)) $saved = [];
-    return array_replace_recursive($defaults, $saved);
+    // Merge only NON-OAUTH defaults
+    $settings = array_replace_recursive($defaults, $settings);
+
+    $cache = $settings;
+    return $settings;
 }
 
 function fcwpb_get_default_settings(): array {
@@ -58,12 +62,6 @@ function fcwpb_get_default_settings(): array {
         'connection' => [
             'client_id' => '',
             'client_secret'  => '',
-        ],
-        'oauth' => [
-            'access_token' => '',
-            'refresh_token' => '',
-            'expires_at' => 0,
-            'location_id' => '',
         ],
         'modules' => [
             'utm' => true,

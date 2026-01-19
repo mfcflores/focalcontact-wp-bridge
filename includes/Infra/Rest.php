@@ -8,6 +8,7 @@ if (!defined('ABSPATH')) {
 class Rest {
 
     const OPTION_KEY = 'fcwpb_settings';
+    const OAUTH_KEY = 'fcwpb_oauth';
 
     public static function init() {
         add_action('rest_api_init', [self::class, 'register_routes']);
@@ -31,10 +32,11 @@ class Rest {
 
     public static function test_contact() {
         $settings = get_option(self::OPTION_KEY, []);
+        $oauth = get_option(self::OAUTH_KEY, []);
 
         if (
-            empty($settings['oauth']['access_token']) ||
-            empty($settings['oauth']['location_id'])
+            empty($oauth['access_token']) ||
+            empty($oauth['location_id'])
         ) {
             return [
                 'ok' => false,
@@ -46,14 +48,14 @@ class Rest {
             'email'     => 'test-' . time() . '@example.com',
             'firstName' => 'Test',
             'lastName'  => 'Contact',
-            'locationId'=> $settings['oauth']['location_id'],
+            'locationId'=> $oauth['location_id'],
         ];
 
         $response = wp_remote_post(
             'https://services.leadconnectorhq.com/contacts/',
             [
                 'headers' => [
-                    'Authorization' => 'Bearer ' . $settings['oauth']['access_token'],
+                    'Authorization' => 'Bearer ' . $oauth['access_token'],
                     'Version'       => '2021-07-28',
                     'Content-Type'  => 'application/json',
                 ],
@@ -84,6 +86,7 @@ class Rest {
         }
 
         $settings = get_option(self::OPTION_KEY, []);
+        $oauth = get_option(self::OAUTH_KEY, []);
         $client_id     = $settings['client_id'] ?? '';
         $version_id    = $settings['version_id'] ?? '';
         $redirect_uri  = 'https://buzzwebmedia.com.au/leadconnector/oauth'; // Must match app config
@@ -112,10 +115,10 @@ class Rest {
         }
 
         // Persist tokens
-        $settings['access_token']  = $body['access_token'];
-        $settings['refresh_token'] = $body['refresh_token'];
-        $settings['location_id']   = $body['locationId'] ?? '';
-        update_option(self::OPTION_KEY, $settings);
+        $oauth['access_token']  = $body['access_token'];
+        $oauth['refresh_token'] = $body['refresh_token'];
+        $oauth['location_id']   = $body['locationId'] ?? '';
+        update_option(self::OAUTH_KEY, $settings);
 
         return ['ok' => true, 'tokens' => $body];
     }
